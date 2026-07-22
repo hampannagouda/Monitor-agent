@@ -87,6 +87,47 @@ A simple utility script for checking disk usage:
 python list-process.py
 ```
 
+## Advanced Features
+
+The Monitor Agent can be enhanced with the following integrations and features:
+
+### Email Alerts
+- Automatic email notifications when CPU or disk thresholds are exceeded
+- Configurable recipient list and notification frequency
+- Detailed alert messages with system metrics and affected processes
+
+### Slack/Teams Notifications
+- Real-time alerts to Slack or Microsoft Teams channels
+- Custom message formatting with severity levels
+- Process termination notifications with before/after metrics
+- Integration with incident management workflows
+
+### CloudWatch Integration
+- Send system metrics to AWS CloudWatch
+- Create custom alarms based on CPU and disk thresholds
+- Enable centralized monitoring across multiple systems
+- Integration with CloudWatch dashboards and alert policies
+
+### Docker Container Deployment
+- Containerized deployment for consistent environments
+- Pre-configured Docker image with all dependencies
+- Easy scaling and orchestration with Kubernetes
+- Simplified CI/CD pipeline integration
+
+### Metrics Dashboard (Grafana)
+- Visual metrics dashboard using Grafana
+- Real-time CPU and disk usage graphs
+- Historical trend analysis and alerting
+- Custom dashboard layouts and data source integration
+- Process-level performance metrics
+
+### Systemd Service Deployment
+- Native systemd unit file for Linux systems
+- Automatic startup on system boot
+- Service management with systemctl commands
+- Log rotation and journald integration
+- Service restart policies and dependency management
+
 ## Notes
 
 - Without the `--live` flag, all actions are simulated (dry-run mode)
