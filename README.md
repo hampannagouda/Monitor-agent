@@ -14,14 +14,41 @@ A system monitoring agent for Windows that tracks CPU and disk usage, with autom
 
 ## Requirements
 
+### Monitor Agent
 - Python 3.x
 - `psutil` library
 
+### Main Agent
+- Python 3.x
+- `flask` library
+
 ## Installation
 
-1. Install dependencies:
+1. Install the monitor agent dependency:
 ```bash
 pip install psutil
+```
+
+2. Install the main agent dependency:
+```bash
+pip install flask
+```
+
+## Running Both Agents
+
+Start the main agent first:
+```bash
+python main_agent.py --port 5000
+```
+
+Then start the monitor agent and point it to the main agent:
+```bash
+python monitor_agent.py --report-url http://127.0.0.1:5000/report --agent-id my-agent
+```
+
+You can view the dashboard at:
+```text
+http://127.0.0.1:5000/dashboard
 ```
 
 ## Usage

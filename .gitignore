@@ -1,1 +1,4 @@
+*.log
+*.log.*
+main_agent.log
 monitor_agent.log
