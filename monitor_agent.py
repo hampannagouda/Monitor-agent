@@ -2,14 +2,14 @@
 """
 Simple System Monitor Agent
 ----------------------------
-Watches CPU and disk usage. If CPU usage crosses a threshold,
-it finds the process using the most CPU and kills it — unless
-that process is on the "protected" list.
+Watches CPU, RAM, and disk usage. If CPU or RAM usage crosses its
+threshold, it finds the process using the most of that resource and
+kills it — unless that process is on the "protected" list.
 
 USAGE:
     python monitor_agent.py                     # dry-run, just logs
     python monitor_agent.py --live               # actually kills processes
-    python monitor_agent.py --cpu-threshold 80 --interval 5
+    python monitor_agent.py --cpu-threshold 80 --ram-threshold 85 --interval 5
 """
 
 import psutil
@@ -46,7 +46,7 @@ def setup_logging():
     )
 
 
-def report_to_main_agent(report_url, agent_id, cpu, disk, last_action):
+def report_to_main_agent(report_url, agent_id, cpu, ram, disk, last_action):
     """POST a short status update to the main agent. Never blocks the loop for long,
     and never crashes the sub-agent if the main agent / network is unreachable."""
     if not report_url:
@@ -55,6 +55,7 @@ def report_to_main_agent(report_url, agent_id, cpu, disk, last_action):
         "agent_id": agent_id,
         "hostname": socket.gethostname(),
         "cpu": round(cpu, 1),
+        "ram": round(ram, 1),
         "disk": round(disk, 1),
         "last_action": last_action,
     }).encode("utf-8")
@@ -73,6 +74,10 @@ def report_to_main_agent(report_url, agent_id, cpu, disk, last_action):
 def get_disk_usage(path="/"):
     usage = psutil.disk_usage(path)
     return usage.percent
+
+
+def get_ram_usage():
+    return psutil.virtual_memory().percent
 
 
 def get_top_cpu_process(exclude_pid=None):
@@ -109,6 +114,23 @@ def get_top_cpu_process(exclude_pid=None):
     return best, best_cpu
 
 
+def get_top_ram_process(exclude_pid=None):
+    """Return the process using the most RAM right now, as (proc, percent)."""
+    best = None
+    best_ram = -1
+    for p in psutil.process_iter(["pid", "memory_percent"]):
+        try:
+            if p.info["pid"] == exclude_pid:
+                continue
+            ram = p.info["memory_percent"]
+            if ram is not None and ram > best_ram:
+                best_ram = ram
+                best = p
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+    return best, best_ram
+
+
 def is_protected(proc):
     try:
         name = proc.name().lower()
@@ -143,6 +165,8 @@ def main():
     parser = argparse.ArgumentParser(description="Simple CPU/Disk monitor agent")
     parser.add_argument("--cpu-threshold", type=float, default=85.0,
                          help="CPU usage %% that triggers action (default: 85)")
+    parser.add_argument("--ram-threshold", type=float, default=85.0,
+                         help="RAM usage %% that triggers action (default: 85)")
     parser.add_argument("--disk-threshold", type=float, default=90.0,
                          help="Disk usage %% that triggers a warning (default: 90)")
     parser.add_argument("--interval", type=float, default=5.0,
@@ -162,17 +186,20 @@ def main():
     own_pid = psutil.Process().pid
 
     logging.info("Starting monitor agent.")
-    logging.info(f"CPU threshold: {args.cpu_threshold}% | Disk threshold: {args.disk_threshold}%")
+    logging.info(f"CPU threshold: {args.cpu_threshold}% | RAM threshold: {args.ram_threshold}% | "
+                 f"Disk threshold: {args.disk_threshold}%")
     logging.info(f"Mode: {'LIVE (will kill processes)' if not dry_run else 'DRY RUN (logging only)'}")
 
-    last_kill_time = 0
+    last_kill_time_cpu = 0
+    last_kill_time_ram = 0
 
     try:
         while True:
             cpu = psutil.cpu_percent(interval=1)
+            ram = get_ram_usage()
             disk = get_disk_usage("/")
 
-            logging.info(f"CPU: {cpu:.1f}% | Disk: {disk:.1f}%")
+            logging.info(f"CPU: {cpu:.1f}% | RAM: {ram:.1f}% | Disk: {disk:.1f}%")
 
             last_action = "OK"
 
@@ -182,7 +209,7 @@ def main():
 
             if cpu >= args.cpu_threshold:
                 now = time.time()
-                if now - last_kill_time < COOLDOWN_SECONDS:
+                if now - last_kill_time_cpu < COOLDOWN_SECONDS:
                     logging.info("CPU high, but still in cooldown period. Skipping action.")
                     last_action = "CPU high (cooldown)"
                 else:
@@ -198,11 +225,33 @@ def main():
                     else:
                         logging.info(f"Top CPU consumer: {proc.name()} (PID {proc.pid}) at {proc_cpu:.1f}%")
                         kill_process(proc, dry_run)
-                        last_kill_time = now
+                        last_kill_time_cpu = now
                         verb = "Would kill" if dry_run else "Killed"
-                        last_action = f"{verb} {proc.name()} (PID {proc.pid})"
+                        last_action = f"{verb} {proc.name()} (PID {proc.pid}) - high CPU"
 
-            report_to_main_agent(args.report_url, agent_id, cpu, disk, last_action)
+            if ram >= args.ram_threshold:
+                now = time.time()
+                if now - last_kill_time_ram < COOLDOWN_SECONDS:
+                    logging.info("RAM high, but still in cooldown period. Skipping action.")
+                    last_action = "RAM high (cooldown)"
+                else:
+                    logging.warning(f"RAM usage high: {ram:.1f}% >= {args.ram_threshold}%")
+                    proc, proc_ram = get_top_ram_process(exclude_pid=own_pid)
+
+                    if proc is None:
+                        logging.info("No suitable process found.")
+                        last_action = "RAM high (no target)"
+                    elif is_protected(proc):
+                        logging.info(f"Top RAM process '{proc.name()}' is protected. Not killing.")
+                        last_action = f"RAM high (protected: {proc.name()})"
+                    else:
+                        logging.info(f"Top RAM consumer: {proc.name()} (PID {proc.pid}) at {proc_ram:.1f}%")
+                        kill_process(proc, dry_run)
+                        last_kill_time_ram = now
+                        verb = "Would kill" if dry_run else "Killed"
+                        last_action = f"{verb} {proc.name()} (PID {proc.pid}) - high RAM"
+
+            report_to_main_agent(args.report_url, agent_id, cpu, ram, disk, last_action)
 
             time.sleep(args.interval)
 
