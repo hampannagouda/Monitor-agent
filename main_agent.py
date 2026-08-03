@@ -58,6 +58,7 @@ def report():
             "agent_id": agent_id,
             "hostname": data.get("hostname", "unknown"),
             "cpu": data.get("cpu"),
+            "ram": data.get("ram"),
             "disk": data.get("disk"),
             "last_action": data.get("last_action", "-"),
             "last_seen": time.time(),
@@ -107,7 +108,7 @@ DASHBOARD_HTML = """
   <p>Auto-refreshes every 5s. A sub-agent is marked OFFLINE after {{ stale_after }}s of silence.</p>
   <table>
     <tr>
-      <th>Agent ID</th><th>Hostname</th><th>CPU %</th><th>Disk %</th>
+      <th>Agent ID</th><th>Hostname</th><th>CPU %</th><th>RAM %</th><th>Disk %</th>
       <th>Last Action</th><th>Last Seen (s ago)</th><th>Status</th>
     </tr>
     {% for a in agents %}
@@ -115,6 +116,7 @@ DASHBOARD_HTML = """
       <td>{{ a.agent_id }}</td>
       <td>{{ a.hostname }}</td>
       <td>{{ a.cpu }}</td>
+      <td>{{ a.ram }}</td>
       <td>{{ a.disk }}</td>
       <td>{{ a.last_action }}</td>
       <td>{{ a.seconds_since_report }}</td>

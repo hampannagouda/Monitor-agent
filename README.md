@@ -1,163 +1,97 @@
 # Monitor Agent
 
-A system monitoring agent for Windows that tracks CPU and disk usage, with automated process management to prevent resource exhaustion.
+This workspace contains a small monitoring setup for Windows that combines a local system monitor with a lightweight Flask-based status dashboard.
+
+## What is included
+
+- main_agent.py: a Flask service that collects status updates from monitor agents and serves a simple dashboard
+- monitor_agent.py: a sub-agent that checks CPU, RAM, and disk usage and can optionally terminate high-resource processes
+- list-process.py: a simple utility script for inspecting disk usage
+- app.py: a minimal Flask example app
 
 ## Features
 
-- **CPU Monitoring**: Tracks CPU usage with configurable thresholds
-- **Disk Monitoring**: Monitors disk space usage
-- **Automatic Process Termination**: Automatically kills high CPU-consuming processes (when enabled)
-- **Protected Processes**: Safeguards critical system processes from termination
-- **Dry-Run Mode**: Test process termination logic without actually killing processes
-- **Configurable Thresholds**: Customize CPU and disk usage limits
-- **Logging**: Comprehensive logging to both file (`monitor_agent.log`) and console
+- CPU, RAM, and disk monitoring
+- Optional automatic process termination in live mode
+- Protected process handling to avoid killing essential system processes
+- Dry-run mode by default for safe testing
+- Logging to both the console and log files
+- A basic dashboard for viewing agent status
 
 ## Requirements
 
-### Monitor Agent
-- Python 3.x
-- `psutil` library
+Install the Python dependencies:
 
-### Main Agent
-- Python 3.x
-- `flask` library
-
-## Installation
-
-1. Install the monitor agent dependency:
 ```bash
-pip install psutil
+pip install psutil flask
 ```
 
-2. Install the main agent dependency:
-```bash
-pip install flask
-```
+## Running the main agent
 
-## Running Both Agents
+Start the central Flask service first:
 
-Start the main agent first:
 ```bash
 python main_agent.py --port 5000
 ```
 
-Then start the monitor agent and point it to the main agent:
-```bash
-python monitor_agent.py --report-url http://127.0.0.1:5000/report --agent-id my-agent
-```
+Then open:
 
-You can view the dashboard at:
 ```text
 http://127.0.0.1:5000/dashboard
 ```
 
-## Usage
+## Running the monitor agent
 
-### Basic Usage
+Start a monitor agent and send reports to the main agent:
 
-Run the monitor agent with default settings:
 ```bash
-python monitor_agent.py
+python monitor_agent.py --report-url http://127.0.0.1:5000/report --agent-id my-agent
 ```
 
-### Command-Line Options
+### Common options
 
 ```bash
 python monitor_agent.py [OPTIONS]
 ```
 
-**Available options:**
-- `--cpu-threshold PERCENTAGE` - CPU usage percentage that triggers action (default: 85%)
-- `--disk-threshold PERCENTAGE` - Disk usage percentage that triggers action (default: 90%)
-- `--interval SECONDS` - Seconds between system checks (default: 5)
-- `--live` - Actually terminate processes (without this flag, runs in dry-run mode)
+Available options:
+- --cpu-threshold PERCENTAGE: CPU usage threshold that triggers action (default: 85)
+- --ram-threshold PERCENTAGE: RAM usage threshold that triggers action (default: 85)
+- --disk-threshold PERCENTAGE: Disk usage threshold that triggers a warning (default: 90)
+- --interval SECONDS: Delay between checks (default: 5)
+- --live: Enable actual process termination (default is dry-run)
+- --report-url URL: Main agent /report endpoint
+- --agent-id ID: Unique name for this sub-agent
 
 ### Examples
 
-**Dry-run mode (default - no processes are killed):**
+Dry-run mode (default):
+
 ```bash
-python monitor_agent.py --cpu-threshold 80 --interval 10
+python monitor_agent.py
 ```
 
-**Live mode (actually terminates processes):**
+Live mode:
+
 ```bash
-python monitor_agent.py --cpu-threshold 80 --live
+python monitor_agent.py --live
 ```
 
-**Custom thresholds:**
+Custom thresholds:
+
 ```bash
-python monitor_agent.py --cpu-threshold 75 --disk-threshold 85 --interval 5 --live
+python monitor_agent.py --cpu-threshold 80 --ram-threshold 85 --interval 5 --live
 ```
 
-## Protected Processes
+## Main agent endpoints
 
-The following processes are protected and will not be terminated:
-- System critical: `systemd`, `kernel_task`, `launchd`, `init`
-- Windows services: `explorer.exe`, `winlogon.exe`, `csrss.exe`, `services.exe`, `System`, `Registry`, `smss.exe`, `dwm.exe`, `lsass.exe`
-- Python interpreters: `python`, `python3`
-- Shells: `sshd`, `bash`, `zsh`, `cmd.exe`, `powershell.exe`
-
-## Output
-
-Logs are written to `monitor_agent.log` with timestamps and severity levels. Example output:
-```
-2026-07-22 10:30:45 [INFO] Starting monitor agent...
-2026-07-22 10:30:50 [WARNING] killed process: chrome.exe (PID 2048)
-```
-
-## Utility Scripts
-
-### list-process.py
-
-A simple utility script for checking disk usage:
-```bash
-python list-process.py
-```
-
-## Advanced Features
-
-The Monitor Agent can be enhanced with the following integrations and features:
-
-### Email Alerts
-- Automatic email notifications when CPU or disk thresholds are exceeded
-- Configurable recipient list and notification frequency
-- Detailed alert messages with system metrics and affected processes
-
-### Slack/Teams Notifications
-- Real-time alerts to Slack or Microsoft Teams channels
-- Custom message formatting with severity levels
-- Process termination notifications with before/after metrics
-- Integration with incident management workflows
-
-### CloudWatch Integration
-- Send system metrics to AWS CloudWatch
-- Create custom alarms based on CPU and disk thresholds
-- Enable centralized monitoring across multiple systems
-- Integration with CloudWatch dashboards and alert policies
-
-### Docker Container Deployment
-- Containerized deployment for consistent environments
-- Pre-configured Docker image with all dependencies
-- Easy scaling and orchestration with Kubernetes
-- Simplified CI/CD pipeline integration
-
-### Metrics Dashboard (Grafana)
-- Visual metrics dashboard using Grafana
-- Real-time CPU and disk usage graphs
-- Historical trend analysis and alerting
-- Custom dashboard layouts and data source integration
-- Process-level performance metrics
-
-### Systemd Service Deployment
-- Native systemd unit file for Linux systems
-- Automatic startup on system boot
-- Service management with systemctl commands
-- Log rotation and journald integration
-- Service restart policies and dependency management
+- POST /report: accepts JSON status updates from sub-agents
+- GET /status: returns the current agent snapshot as JSON
+- GET /dashboard: displays a simple browser-based dashboard
 
 ## Notes
 
-- Without the `--live` flag, all actions are simulated (dry-run mode)
-- The agent has a 30-second cooldown between termination actions
-- Graceful termination is attempted first; force kill is used if timeout occurs
-- Run with administrator privileges for optimal functionality
+- By default, monitor_agent.py runs in dry-run mode and only logs what it would do.
+- Critical or essential processes are protected and will not be terminated.
+- For the best experience on Windows, run the scripts with administrator privileges.
+- Logs are written to monitor_agent.log and main_agent.log.
